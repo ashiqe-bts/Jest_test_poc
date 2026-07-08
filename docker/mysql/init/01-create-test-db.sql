@@ -1,0 +1,2 @@
+CREATE DATABASE IF NOT EXISTS nest_prisma_dev;
+CREATE DATABASE IF NOT EXISTS nest_prisma_test;
