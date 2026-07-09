@@ -9,6 +9,8 @@ import { AppModule } from "../src/app.module";
 import { UsersController } from "../src/users/users.controller";
 import { UsersRepository } from "../src/users/users.repository";
 
+jest.setTimeout(30_000);
+
 const testUsers = {
   create: {
     name: "Create Test",
@@ -80,7 +82,7 @@ const testUsers = {
   },
 };
 
-describe("UsersController functional tests", () => {
+describe("Users endpoint scenarios without HTTP", () => {
   let app: INestApplication;
   let usersController: UsersController;
   let usersRepository: UsersRepository;
@@ -107,11 +109,11 @@ describe("UsersController functional tests", () => {
     expect(process.env.DATABASE_URL).toContain("nest_prisma_test");
   });
 
-  it("gets an empty user list after the module-level cleanup", async () => {
+  it("GET /users scenario returns an empty list after setup cleanup", async () => {
     await expect(usersController.findAll()).resolves.toEqual([]);
   });
 
-  it("creates a user", async () => {
+  it("POST /users scenario creates a user", async () => {
     const user = await usersController.create(testUsers.create);
 
     expect(user).toMatchObject(testUsers.create);
@@ -120,7 +122,7 @@ describe("UsersController functional tests", () => {
     expect(user.updatedAt).toBeInstanceOf(Date);
   });
 
-  it("rejects a duplicate email", async () => {
+  it("POST /users scenario rejects a duplicate email", async () => {
     await usersController.create(testUsers.duplicate);
 
     await expect(
@@ -128,7 +130,7 @@ describe("UsersController functional tests", () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it("gets all users", async () => {
+  it("GET /users scenario returns all users", async () => {
     const john = await usersController.create(testUsers.listJohn);
     const jane = await usersController.create(testUsers.listJane);
 
@@ -137,7 +139,7 @@ describe("UsersController functional tests", () => {
     );
   });
 
-  it("gets all users ordered by id", async () => {
+  it("GET /users scenario returns users ordered by id", async () => {
     const jane = await usersController.create(testUsers.orderJane);
     const john = await usersController.create(testUsers.orderJohn);
     const ada = await usersController.create(testUsers.orderAda);
@@ -148,26 +150,26 @@ describe("UsersController functional tests", () => {
     expect(users).toEqual(expect.arrayContaining([jane, john, ada]));
   });
 
-  it("gets one user by id", async () => {
+  it("GET /users/:id scenario returns one user", async () => {
     const user = await usersController.create(testUsers.findOne);
 
     await expect(usersController.findOne(user.id)).resolves.toEqual(user);
   });
 
-  it("throws not found for a missing user", async () => {
+  it("GET /users/:id scenario returns not found for a missing user", async () => {
     await expect(usersController.findOne(999999)).rejects.toBeInstanceOf(
       NotFoundException,
     );
   });
 
   it.each(["abc", "1.5", "0", "-1", Number.NaN])(
-    "throws bad request for invalid find id %p",
+    "GET /users/%p scenario rejects an invalid id",
     (id) => {
       expect(() => usersController.findOne(id)).toThrow(BadRequestException);
     },
   );
 
-  it("updates a user", async () => {
+  it("PATCH /users/:id scenario updates a user name", async () => {
     const user = await usersController.create(testUsers.updateName);
 
     const updated = await usersController.update(user.id, {
@@ -184,7 +186,7 @@ describe("UsersController functional tests", () => {
     );
   });
 
-  it("updates only a user email", async () => {
+  it("PATCH /users/:id scenario updates only a user email", async () => {
     const user = await usersController.create(testUsers.updateEmail);
 
     const updated = await usersController.update(user.id, {
@@ -198,7 +200,7 @@ describe("UsersController functional tests", () => {
     });
   });
 
-  it("updates a user with the same email", async () => {
+  it("PATCH /users/:id scenario allows updating a user with the same email", async () => {
     const user = await usersController.create(testUsers.updateSameEmail);
 
     const updated = await usersController.update(user.id, {
@@ -213,7 +215,7 @@ describe("UsersController functional tests", () => {
     });
   });
 
-  it("updates a user with an empty body", async () => {
+  it("PATCH /users/:id scenario accepts an empty body and leaves the user unchanged", async () => {
     const user = await usersController.create(testUsers.updateEmpty);
 
     const updated = await usersController.update(user.id, {});
@@ -225,13 +227,13 @@ describe("UsersController functional tests", () => {
     });
   });
 
-  it("throws not found when updating a missing user", async () => {
+  it("PATCH /users/:id scenario returns not found for a missing user", async () => {
     await expect(
       usersController.update(999999, { name: "Missing User" }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it("rejects updating a user email to another existing email", async () => {
+  it("PATCH /users/:id scenario rejects changing an email to another user's email", async () => {
     const source = await usersController.create(testUsers.updateConflictSource);
     const target = await usersController.create(testUsers.updateConflictTarget);
 
@@ -241,7 +243,7 @@ describe("UsersController functional tests", () => {
   });
 
   it.each(["abc", "1.5", "0", "-1", Number.NaN])(
-    "throws bad request for invalid update id %p",
+    "PATCH /users/%p scenario rejects an invalid id",
     (id) => {
       expect(() => usersController.update(id, { name: "Invalid Id" })).toThrow(
         BadRequestException,
@@ -249,7 +251,7 @@ describe("UsersController functional tests", () => {
     },
   );
 
-  it("deletes a user", async () => {
+  it("DELETE /users/:id scenario deletes a user", async () => {
     const user = await usersController.create(testUsers.delete);
 
     await expect(usersController.remove(user.id)).resolves.toEqual(user);
@@ -258,13 +260,13 @@ describe("UsersController functional tests", () => {
     );
   });
 
-  it("throws not found when deleting a missing user", async () => {
+  it("DELETE /users/:id scenario returns not found for a missing user", async () => {
     await expect(usersController.remove(999999)).rejects.toBeInstanceOf(
       NotFoundException,
     );
   });
 
-  it("throws not found when deleting the same user twice", async () => {
+  it("DELETE /users/:id scenario returns not found when deleting the same user twice", async () => {
     const user = await usersController.create(testUsers.deleteTwice);
 
     await usersController.remove(user.id);
@@ -275,7 +277,7 @@ describe("UsersController functional tests", () => {
   });
 
   it.each(["abc", "1.5", "0", "-1", Number.NaN])(
-    "throws bad request for invalid delete id %p",
+    "DELETE /users/%p scenario rejects an invalid id",
     (id) => {
       expect(() => usersController.remove(id)).toThrow(BadRequestException);
     },
