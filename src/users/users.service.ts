@@ -25,7 +25,7 @@ export class UsersService {
     return this.usersRepository.findAll();
   }
 
-  async findOne(id: number) {
+  async findOne(id: string) {
     const user = await this.usersRepository.findById(id);
 
     if (!user) {
@@ -35,7 +35,7 @@ export class UsersService {
     return user;
   }
 
-  async update(id: number, dto: UpdateUserDto) {
+  async update(id: string, dto: UpdateUserDto) {
     await this.findOne(id);
 
     if (dto.email) {
@@ -49,7 +49,7 @@ export class UsersService {
     return this.usersRepository.update(id, dto);
   }
 
-  async remove(id: number) {
+  async remove(id: string) {
     await this.findOne(id);
 
     return this.usersRepository.delete(id);

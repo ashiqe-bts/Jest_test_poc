@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -10,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UserIdParamDto } from './dto/user-id-param.dto';
 import { UsersService } from './users.service';
 
 @Controller('users')
@@ -27,27 +27,17 @@ export class UsersController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string | number) {
-    return this.usersService.findOne(this.parseId(id));
+  findOne(@Param() params: UserIdParamDto) {
+    return this.usersService.findOne(params.id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string | number, @Body() dto: UpdateUserDto) {
-    return this.usersService.update(this.parseId(id), dto);
+  update(@Param() params: UserIdParamDto, @Body() dto: UpdateUserDto) {
+    return this.usersService.update(params.id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string | number) {
-    return this.usersService.remove(this.parseId(id));
-  }
-
-  private parseId(id: string | number): number {
-    const parsedId = Number(id);
-
-    if (!Number.isInteger(parsedId) || parsedId <= 0) {
-      throw new BadRequestException('User id must be a positive integer');
-    }
-
-    return parsedId;
+  remove(@Param() params: UserIdParamDto) {
+    return this.usersService.remove(params.id);
   }
 }

@@ -3,9 +3,12 @@ import {
   ConflictException,
   INestApplication,
   NotFoundException,
+  ValidationPipe,
 } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
+import { isUUID } from "class-validator";
 import { AppModule } from "../src/app.module";
+import { UserIdParamDto } from "../src/users/dto/user-id-param.dto";
 import { UsersController } from "../src/users/users.controller";
 import { UsersRepository } from "../src/users/users.repository";
 
@@ -82,6 +85,17 @@ const testUsers = {
   },
 };
 
+const missingUserId = "00000000-0000-4000-8000-000000000000";
+const invalidUserIds = ["abc", "1.5", "0", "-1", "not-a-uuid", ""];
+const paramValidationPipe = new ValidationPipe({ whitelist: true });
+
+function userIdParams(id: string): Promise<UserIdParamDto> {
+  return paramValidationPipe.transform(
+    { id },
+    { type: "param", metatype: UserIdParamDto },
+  );
+}
+
 describe("Users endpoint scenarios without HTTP", () => {
   let app: INestApplication;
   let usersController: UsersController;
@@ -117,7 +131,8 @@ describe("Users endpoint scenarios without HTTP", () => {
     const user = await usersController.create(testUsers.create);
 
     expect(user).toMatchObject(testUsers.create);
-    expect(user.id).toEqual(expect.any(Number));
+    expect(user.id).toEqual(expect.any(String));
+    expect(isUUID(user.id)).toBe(true);
     expect(user.createdAt).toBeInstanceOf(Date);
     expect(user.updatedAt).toBeInstanceOf(Date);
   });
@@ -146,35 +161,42 @@ describe("Users endpoint scenarios without HTTP", () => {
     const users = await usersController.findAll();
     const ids = users.map((user) => user.id);
 
-    expect(ids).toEqual([...ids].sort((left, right) => left - right));
+    expect(ids).toEqual(
+      [...ids].sort((left, right) => left.localeCompare(right)),
+    );
     expect(users).toEqual(expect.arrayContaining([jane, john, ada]));
   });
 
   it("GET /users/:id scenario returns one user", async () => {
     const user = await usersController.create(testUsers.findOne);
 
-    await expect(usersController.findOne(user.id)).resolves.toEqual(user);
+    await expect(
+      usersController.findOne(await userIdParams(user.id)),
+    ).resolves.toEqual(user);
   });
 
   it("GET /users/:id scenario returns not found for a missing user", async () => {
-    await expect(usersController.findOne(999999)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      usersController.findOne(await userIdParams(missingUserId)),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it.each(["abc", "1.5", "0", "-1", Number.NaN])(
+  it.each(invalidUserIds)(
     "GET /users/%p scenario rejects an invalid id",
-    (id) => {
-      expect(() => usersController.findOne(id)).toThrow(BadRequestException);
+    async (id) => {
+      await expect(userIdParams(id)).rejects.toBeInstanceOf(BadRequestException);
     },
   );
 
   it("PATCH /users/:id scenario updates a user name", async () => {
     const user = await usersController.create(testUsers.updateName);
 
-    const updated = await usersController.update(user.id, {
-      name: "John Updated",
-    });
+    const updated = await usersController.update(
+      await userIdParams(user.id),
+      {
+        name: "John Updated",
+      },
+    );
 
     expect(updated).toMatchObject({
       id: user.id,
@@ -189,9 +211,12 @@ describe("Users endpoint scenarios without HTTP", () => {
   it("PATCH /users/:id scenario updates only a user email", async () => {
     const user = await usersController.create(testUsers.updateEmail);
 
-    const updated = await usersController.update(user.id, {
-      email: "john.updated@example.com",
-    });
+    const updated = await usersController.update(
+      await userIdParams(user.id),
+      {
+        email: "john.updated@example.com",
+      },
+    );
 
     expect(updated).toMatchObject({
       id: user.id,
@@ -203,10 +228,13 @@ describe("Users endpoint scenarios without HTTP", () => {
   it("PATCH /users/:id scenario allows updating a user with the same email", async () => {
     const user = await usersController.create(testUsers.updateSameEmail);
 
-    const updated = await usersController.update(user.id, {
-      name: "John Same Email",
-      email: testUsers.updateSameEmail.email,
-    });
+    const updated = await usersController.update(
+      await userIdParams(user.id),
+      {
+        name: "John Same Email",
+        email: testUsers.updateSameEmail.email,
+      },
+    );
 
     expect(updated).toMatchObject({
       id: user.id,
@@ -218,7 +246,7 @@ describe("Users endpoint scenarios without HTTP", () => {
   it("PATCH /users/:id scenario accepts an empty body and leaves the user unchanged", async () => {
     const user = await usersController.create(testUsers.updateEmpty);
 
-    const updated = await usersController.update(user.id, {});
+    const updated = await usersController.update(await userIdParams(user.id), {});
 
     expect(updated).toMatchObject({
       id: user.id,
@@ -229,7 +257,9 @@ describe("Users endpoint scenarios without HTTP", () => {
 
   it("PATCH /users/:id scenario returns not found for a missing user", async () => {
     await expect(
-      usersController.update(999999, { name: "Missing User" }),
+      usersController.update(await userIdParams(missingUserId), {
+        name: "Missing User",
+      }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -238,48 +268,50 @@ describe("Users endpoint scenarios without HTTP", () => {
     const target = await usersController.create(testUsers.updateConflictTarget);
 
     await expect(
-      usersController.update(source.id, { email: target.email }),
+      usersController.update(await userIdParams(source.id), {
+        email: target.email,
+      }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it.each(["abc", "1.5", "0", "-1", Number.NaN])(
+  it.each(invalidUserIds)(
     "PATCH /users/%p scenario rejects an invalid id",
-    (id) => {
-      expect(() => usersController.update(id, { name: "Invalid Id" })).toThrow(
-        BadRequestException,
-      );
+    async (id) => {
+      await expect(userIdParams(id)).rejects.toBeInstanceOf(BadRequestException);
     },
   );
 
   it("DELETE /users/:id scenario deletes a user", async () => {
     const user = await usersController.create(testUsers.delete);
 
-    await expect(usersController.remove(user.id)).resolves.toEqual(user);
-    await expect(usersController.findOne(user.id)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      usersController.remove(await userIdParams(user.id)),
+    ).resolves.toEqual(user);
+    await expect(
+      usersController.findOne(await userIdParams(user.id)),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it("DELETE /users/:id scenario returns not found for a missing user", async () => {
-    await expect(usersController.remove(999999)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      usersController.remove(await userIdParams(missingUserId)),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it("DELETE /users/:id scenario returns not found when deleting the same user twice", async () => {
     const user = await usersController.create(testUsers.deleteTwice);
 
-    await usersController.remove(user.id);
+    await usersController.remove(await userIdParams(user.id));
 
-    await expect(usersController.remove(user.id)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      usersController.remove(await userIdParams(user.id)),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it.each(["abc", "1.5", "0", "-1", Number.NaN])(
+  it.each(invalidUserIds)(
     "DELETE /users/%p scenario rejects an invalid id",
-    (id) => {
-      expect(() => usersController.remove(id)).toThrow(BadRequestException);
+    async (id) => {
+      await expect(userIdParams(id)).rejects.toBeInstanceOf(BadRequestException);
     },
   );
 

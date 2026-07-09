@@ -4,11 +4,14 @@
   "private": true,
   "scripts": {
     "build": "nest build",
+    "prebuild": "npm run prisma:generate",
     "start": "node dist/main",
     "start:dev": "nest start --watch",
     "test": "jest --runInBand",
+    "pretest": "npm run prisma:generate",
     "test:watch": "jest --watch --runInBand",
     "test:cov": "jest --coverage --runInBand",
+    "pretest:cov": "npm run prisma:generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:test": "dotenv -e .env -- sh -c 'DATABASE_URL=\"$TEST_DATABASE_URL\" prisma migrate deploy'",
@@ -21,6 +24,8 @@
     "@nestjs/platform-express": "^11.0.1",
     "@prisma/adapter-mariadb": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },
